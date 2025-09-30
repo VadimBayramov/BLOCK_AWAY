@@ -3971,49 +3971,59 @@ void main() {
         function isPortrait(){
             try { return window.matchMedia && window.matchMedia('(orientation: portrait)').matches; } catch(_) { return (window.innerHeight >= window.innerWidth); }
         }
+        // ✅ УПРОЩЕННАЯ МАТЕМАТИЧЕСКАЯ СИСТЕМА: линейная интерполяция между контрольными точками
+        // Контрольные точки (aspect ratio → scale) выведены из практики и идеально подогнаны
+        const SCALE_CONTROL_POINTS = [
+            { ratio: 0.50, scale: 1.5 },  // Очень узкие экраны
+            { ratio: 0.55, scale: 1.3 },  // Узкие
+            { ratio: 0.59, scale: 1.0 },  // Средние
+            { ratio: 0.65, scale: 0.7 },  // Широкие вертикальные
+            { ratio: 0.75, scale: 1.0 },  // Почти квадратные (нужен рост для сохранения пропорций башни)
+            { ratio: 1.00, scale: 0.6 }   // Квадратные
+        ];
+        
+        // Линейная интерполяция между двумя точками
+        function lerp(x, x0, y0, x1, y1) {
+            return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+        }
+        
         function updateIntroVideoScale(){
             if (!isPortrait()) {
-                // В горизонтали не увеличиваем
                 document.documentElement.style.setProperty('--video-scale', '1');
                 return;
             }
             
             const w = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
             const h = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
-            const aspectRatio = w / h;  // Соотношение сторон
+            const aspectRatio = w / h;
             
             let scale;
             
-            // ✅ НОВАЯ ЛОГИКА ДЛЯ КВАДРАТНЫХ ЭКРАНОВ (aspect ratio ≥ 0.75)
-            // При приближении к квадрату уменьшаем масштаб с 1.0 до 0.6
-            if (aspectRatio >= 0.75) {
-                // Квадратные и почти квадратные экраны (0.75 ≤ ratio ≤ 1.0)
-                // ratio = 0.75 → scale = 1.0
-                // ratio = 1.0  → scale = 0.6
-                // Формула: scale = 1.0 - (ratio - 0.75) / 0.25 * 0.4
-                const progress = Math.min((aspectRatio - 0.75) / 0.25, 1.0);  // от 0 до 1
-                scale = 1.0 - (progress * 0.4);  // от 1.0 до 0.6
-                console.log(`📐 Квадратный экран: ${w}x${h}, ratio=${aspectRatio.toFixed(2)}, масштаб=${scale.toFixed(2)}`);
+            // Находим две ближайшие контрольные точки и интерполируем между ними
+            if (aspectRatio <= SCALE_CONTROL_POINTS[0].ratio) {
+                // Левее первой точки - используем первое значение
+                scale = SCALE_CONTROL_POINTS[0].scale;
+            } 
+            else if (aspectRatio >= SCALE_CONTROL_POINTS[SCALE_CONTROL_POINTS.length - 1].ratio) {
+                // Правее последней точки - используем последнее значение
+                scale = SCALE_CONTROL_POINTS[SCALE_CONTROL_POINTS.length - 1].scale;
             }
-            // ✅ СУЩЕСТВУЮЩАЯ ЛОГИКА ДЛЯ УЗКИХ ВЕРТИКАЛЬНЫХ ЭКРАНОВ (aspect ratio < 0.75)
             else {
-                // Узкие вертикальные экраны: масштаб зависит от ширины
-                if (w <= 450) {
-                    // Очень узкие экраны (≤450px): масштаб 1.5
-                    scale = 1.5;
-                } else if (w >= 600) {
-                    // Широкие узкие экраны (≥600px): масштаб 1.0
-                    scale = 1.0;
-                } else {
-                    // Промежуточные значения (450-600px): плавный переход от 1.5 до 1.0
-                    const progress = (w - 450) / 150;  // от 0 до 1
-                    scale = 1.5 - (progress * 0.5);    // от 1.5 до 1.0
+                // Находим две точки между которыми лежит наш ratio
+                for (let i = 0; i < SCALE_CONTROL_POINTS.length - 1; i++) {
+                    const p0 = SCALE_CONTROL_POINTS[i];
+                    const p1 = SCALE_CONTROL_POINTS[i + 1];
+                    
+                    if (aspectRatio >= p0.ratio && aspectRatio <= p1.ratio) {
+                        // Линейная интерполяция между p0 и p1
+                        scale = lerp(aspectRatio, p0.ratio, p0.scale, p1.ratio, p1.scale);
+                        break;
+                    }
                 }
-                console.log(`📱 Узкий экран: ширина=${w}px, ratio=${aspectRatio.toFixed(2)}, масштаб=${scale.toFixed(2)}`);
             }
             
-            // Применяем вычисленный масштаб
             document.documentElement.style.setProperty('--video-scale', String(scale));
+            console.log(`📐 ${w}×${h} | ratio: ${aspectRatio.toFixed(3)} | scale: ${scale.toFixed(2)}`);
         }
         
         function flashTransition() {
