@@ -4063,20 +4063,35 @@ void main() {
             flashTransition();
         }
         
-        // Autoplay policies: ensure user gesture fallback
-        video.addEventListener('play', () => {
-            // При старте актуализируем масштаб
+        // ✅ МАКСИМАЛЬНО СТАБИЛЬНАЯ СИСТЕМА ВОСПРОИЗВЕДЕНИЯ
+        
+        // 1️⃣ РАННЯЯ УСТАНОВКА: как только метаданные загружены (размеры видео известны)
+        video.addEventListener('loadedmetadata', () => {
+            console.log(`📹 Метаданные загружены: ${video.videoWidth}×${video.videoHeight}`);
             updateIntroVideoScale();
         }, { once: true });
         
+        // 2️⃣ СТАРТ ВОСПРОИЗВЕДЕНИЯ: повторно устанавливаем масштаб на случай если метаданные не сработали
+        video.addEventListener('play', () => {
+            console.log('▶️ Видео начало воспроизведение');
+            updateIntroVideoScale();
+        }, { once: true });
+        
+        // 3️⃣ ПЕРВЫЙ КАДР: финальная проверка масштаба когда первый кадр отрисован
+        video.addEventListener('playing', () => {
+            console.log('🎬 Первый кадр отрисован');
+            updateIntroVideoScale();
+        }, { once: true });
+        
+        // 4️⃣ ЗАВЕРШЕНИЕ: удаляем оверлей
         video.addEventListener('ended', () => finishIntro(), { once: true });
         
-        // Allow keyboard skip
+        // 5️⃣ КЛАВИАТУРА: пропуск по ESC/Enter/Space
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') finishIntro();
         });
         
-        // Ресайз и смена ориентации
+        // 6️⃣ RESIZE & ORIENTATION: динамическая адаптация
         window.addEventListener('resize', updateIntroVideoScale, { passive: true });
         try {
             if (window.screen?.orientation?.addEventListener) {
@@ -4085,13 +4100,24 @@ void main() {
                 window.addEventListener('orientationchange', updateIntroVideoScale);
             }
         } catch(_) {}
-        // Первичная установка масштаба
+        
+        // 7️⃣ НЕМЕДЛЕННАЯ УСТАНОВКА: до загрузки видео (для мгновенного отклика)
         updateIntroVideoScale();
-
-        // If autoplay blocked, tap to play
+        
+        // 8️⃣ ПРИНУДИТЕЛЬНАЯ ЗАГРУЗКА: гарантируем что браузер начнет загрузку видео
+        try {
+            video.load();
+            console.log('📥 Принудительная загрузка видео инициирована');
+        } catch(e) {
+            console.warn('⚠️ video.load() failed:', e);
+        }
+        
+        // 9️⃣ FALLBACK: если autoplay заблокирован - воспроизведение по клику
         overlay.addEventListener('click', () => {
             if (video.paused) {
-                video.play().catch(() => {});
+                video.play()
+                    .then(() => console.log('✅ Видео запущено по клику'))
+                    .catch((e) => console.warn('⚠️ Не удалось запустить видео:', e));
             }
         });
         
